@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="/bootstrap/css/bootstrap.min.css">
+    <script src="/js/jquery-3.3.1.min.js"></script>
+    <title>Admin panel</title>
+</head>
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <a href="/" class="btn btn-link my-3">Back to the main page</a>
+        </div>
+        <div class="col-md-4">
+            <form action="" method="post" class="w-100 mb-5 p-4 rounded bg-light" id="create_order_form">
+                <h4>Create order: </h4>
+                <div class="form-group">
+                    <div class="form-group">
+                        <label for="base_currency">Base currency: </label>
+                        <select name="base_currency" required class="form-control" id="order_base_currency_lst">
+                            <option disabled>Choose a currency</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="type">Type: </label>
+                        <select name="type" required class="form-control" id="order_type_lst">
+                            <option disabled>Choose a type</option>
+                            <option value="MARKET">MARKET</option>
+                            <option value="LIMIT">LIMIT</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="side">Side: </label>
+                        <select name="side" required class="form-control" id="order_side_lst">
+                            <option disabled>Choose a side</option>
+                            <option value="BUY">BUY</option>
+                            <option value="SELL">SELL</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="quantity">Quantity: </label>
+                        <input type="number" name="quantity" id="order_quantity" min="0" value="1">
+                    </div>
+                    <div class="form-group" id="order_price_group">
+                        <label for="price">Price ($): </label>
+                        <input type="number" name="price" id="order_price" min="0" value="1">
+                    </div>
+                    <div id="create_order_form_message" class="p-2 text-white rounded my-2 d-none"></div>
+                    <button type="button" class="btn btn-success" id="create_order_submit">Create</button>
+                    <img src="gif/preloader.gif" alt="load..." width="25" height="25" class="m-2 d-none" id="create_order_form_preloader">
+                </div>
+            </form>
+        </div>
+        <div class="col-md-8">
+            <h3 class="my-2">Balance:</h3>
+            <table class="table table-bordered" id="balance_table">
+                <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Base currency</th>
+                    <th scope="col">Total</th>
+                    <th scope="col">In Order</th>
+                </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+        <div class="col-md-12">
+            <h3 class="my-2">Currencies:</h3>
+        </div>
+        <div class="col-md-4">
+            <form method="post" action="" class="w-100 mb-5 p-4 rounded bg-light" id="add_currency_form">
+                <h4>Add currency: </h4>
+                <div class="form-group">
+                    <label for="base_currency">Base currency: </label>
+                    <select name="base_currency" required class="form-control" id="base_currency_lst">
+                        <option disabled>Choose a currency</option>
+                    </select>
+                </div>
+                <div class="form-group" id="timestamps_in_add_currency_form">
+                    <label for="interval">Interval: </label> <br>
+                </div>
+                <div class="form-group">
+                    <label for="percentage">Percentage: </label> <br>
+                    <input type="number" name="percentage" min="1" value="10" class="mx-1 w-50">%
+                </div>
+                <div class="form-group">
+                    <label for="amount_to_buy">Amount_to_buy ($): </label> <br>
+                    <input type="number" name="amount_to_buy" min="0" value="0" class="mx-1 w-50">
+                </div>
+                <div id="add_currency_form_error" class="bg-danger p-2 text-white rounded my-2 d-none"></div>
+                <button type="button" class="btn btn-success" id="add_currency_submit">Add</button>
+                <img src="gif/preloader.gif" alt="load..." width="25" height="25" class="m-2 d-none" id="add_currency_form_preloader">
+            </form>
+        </div>
+        <div class="col-md-8">
+            <ul id="currency_lst">
+            </ul>
+        </div>
+    </div>
+</div>
+<script>
+    var timestamps = [];
+
+    var available_base_currencies = [];
+
+    initialize();
+
+    function initialize() {
+        $.ajax({
+            url: 'scripts/admin_controller.php?action=get_timestamps',
+            dataType: 'json',
+            async: false,
+            success: function (response) {
+                response.timestamps.forEach(function (item, i, arr) {
+                    timestamps.push(item);
+                });
+            }
+        });
+        $.ajax({
+            url: 'scripts/admin_controller.php?action=get_prices',
+            dataType: 'json',
+            async: false,
+            success: function (response) {
+                let quote_currency = 'USDT';
+                response.forEach(function (item, i, arr) {
+                    if (item.symbol.substring(item.symbol.length - 4) === quote_currency) {
+                        let base_currency = item.symbol.substring(0, item.symbol.length - 4);
+                        available_base_currencies.push(base_currency);
+                    }
+                });
+            }
+        });
+
+        change_create_order_form();
+        $("#order_type_lst").bind('change', change_create_order_form);
+
+        $.ajax({
+            url: 'scripts/guest_controller.php?action=check_user',
+            async: false,
+            dataType: 'json',
+            success: function (response) {
+                if (response.is_logged == 0)
+                    window.location.replace('login.html');
+            }
+        });
+        $.ajax({
+            url: 'scripts/admin_controller.php?action=get_template',
+            dataType: 'json',
+            success: function (response) {
+                response.currencies.forEach(function (currency, i, currencies) {
+                    add_currency(currency);
+                });
+            }
+        });
+        $("#add_currency_submit").bind('click', function () {
+            let form = $("#add_currency_form");
+            let submit_btn = $("#add_currency_submit");
+            let preloader = $("#add_currency_form_preloader");
+            $.ajax({
+                url: 'scripts/admin_controller.php?action=add_currency',
+                type: 'POST',
+                beforeSend: function () {
+                    submit_btn.attr('disabled', '');
+                    preloader.removeClass('d-none');
+                },
+                data: form.serialize(),
+                dataType: 'json',
+                success: function (response) {
+                    submit_btn.removeAttr('disabled');
+                    if (!preloader.hasClass('d-none'))
+                        preloader.addClass('d-none');
+                    let error = $("#add_currency_form_error");
+                    if (response.status === 'error') {
+                        if (error.hasClass('d-none'))
+                            error.removeClass('d-none');
+                        error.html(response.error_text);
+                    }
+                    else {
+                        form[0].reset();
+                        if (!error.hasClass('d-none'))
+                            error.addClass('d-none');
+                        add_currency(response.currency);
+                    }
+                }
+            });
+        });
+        $("#create_order_submit").bind('click', function () {
+            let form = $("#create_order_form");
+            let submit_btn = $("#create_order_submit");
+            let preloader = $("#create_order_form_preloader");
+            let message = $("#create_order_form_message");
+            $.ajax({
+                url: 'scripts/admin_controller.php?action=create_order',
+                type: 'POST',
+                beforeSend: function () {
+                    submit_btn.attr('disabled', '');
+                    preloader.removeClass('d-none');
+                },
+                data: form.serialize(),
+                dataType: 'json',
+                success: function (response) {
+                    message.removeClass('bg-success bg-danger d-none');
+                    submit_btn.removeAttr('disabled');
+                    if (!preloader.hasClass('d-none'))
+                        preloader.addClass('d-none');
+                    if (response.status === 'error') {
+                        message.addClass('bg-danger');
+                        message.html(response.error_text);
+                    }
+                    else {
+                        message.addClass('bg-success');
+                        message.html(response.success_text);
+                    }
+                }
+            });
+        });
+
+        timestamps.forEach(function (item, i, arr) {
+            $("#timestamps_in_add_currency_form").append("" +
+                "<input type='radio' value='" + item.id + "' name='interval'> " + item.minutes + "m " + (i == timestamps.length - 1 ? "" : "<br>"));
+        });
+        available_base_currencies.forEach(function (item, i, arr) {
+            $("#base_currency_lst").append("" +
+                "<option value='" + item + "'>" + item + "</option>");
+        });
+        available_base_currencies.forEach(function (item, i, arr) {
+            $("#order_base_currency_lst").append("" +
+                "<option value='" + item + "'>" + item + "</option>");
+        });
+
+        // Обновление баланса
+        let balance_table_body = $("#balance_table tbody");
+        $.ajax({
+            url: 'scripts/admin_controller.php?action=get_balance',
+            type: 'POST',
+            dataType: 'json',
+            success: function (response) {
+                console.log(JSON.stringify(response));
+                for (let i = 0; i < response.length; ++i) {
+                    let currency = response[i];
+                    let cell = document.createElement('tr');
+                    cell = $(cell);
+                    cell.append('<th scope="row">' + (i + 1) + '</th>');
+                    cell.append('<td>' + currency.base_currency + '</td>');
+                    cell.append('<td>' + Number(currency.total).toFixed(4) + '</td>');
+                    cell.append('<td>' + Number(currency.in_order).toFixed(4) + '</td>')
+                    balance_table_body.append(cell);
+                }
+            }
+        });
+    }
+
+    function add_currency(currency) {
+        let currency_lst = $("#currency_lst");
+        currency_lst.append("" +
+            "<li id='currency" + currency.id + "'>" +
+            "   <b>Base currency: </b>" + currency.base_currency +
+                "; <b>Interval: </b>" + currency.minutes +
+                "m; <b>Percentage: </b>" + currency.percentage + "% " +
+                "<b>Amount_to_buy: </b> $" + currency.amount_to_buy +
+                "<button type='button' class='btn btn-danger mx-1 btn-sm py-0' id='delete_currency_btn" + currency.id + "'>Delete</button>" +
+            "</li>"
+        );
+        $("#delete_currency_btn" + currency.id).bind('click', function () {
+            if (confirm("Do you really want to delete the currency?"))
+                delete_currency(currency.id);
+        });
+    }
+
+    function delete_currency(id) {
+        $.ajax({
+            url: 'scripts/admin_controller.php?action=delete_currency',
+            dataType: 'json',
+            type: 'POST',
+            data: 'id=' + id,
+            success: function (response) {
+                $("#currency" + id).remove();
+            }
+        });
+    }
+
+    function change_create_order_form() {
+        let type = $("#order_type_lst").val();
+        let fields_in_limit = ['price'];
+        if (type === 'LIMIT') {
+            fields_in_limit.forEach(function (item, i, arr) {
+                $("#order_" + item + "_group").removeClass('d-none');
+            });
+        }
+        else {
+            fields_in_limit.forEach(function (item, i, arr) {
+                let group = $("#order_" + item + "_group");
+                if (!group.hasClass('d-none'))
+                    group.addClass('d-none');
+            });
+        }
+    }
+
+</script>
+</body>
+</html>

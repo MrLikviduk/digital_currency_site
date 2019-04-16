@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="/bootstrap/css/bootstrap.min.css">
+    <script src="/js/jquery-3.3.1.min.js"></script>
+    <title>Digital currency</title>
+</head>
+<body>
+<div class="container mt-3 mt-md-5">
+    <div class="row">
+        <div class="col-md-12">
+            <table class="table table-bordered">
+                <thead class="">
+                <tr>
+                    <th scope="col" class="w-25" rowspan="2">#</th>
+                    <th scope="col" class="w-25" rowspan="2">Base currency</th>
+                    <th scope="col" class="w-50" id="price_header_cell">
+                        Price
+                    </th>
+                </tr>
+                <tr id="header_timestamps">
+                </tr>
+                </thead>
+                <tbody id="prices">
+                </tbody>
+            </table>
+            <a href="admin-panel.html" class="btn btn-link">Admin panel</a>
+            <button type="button" class="btn btn-link" id="logout_btn">Log out</button>
+        </div>
+    </div>
+</div>
+<script>
+
+    var timestamps = [];
+
+    var money_precision = 3;
+
+    var percentage_precision = 2;
+
+    var prices_dct = {};
+
+    initialize();
+
+    function initialize() {
+        $.ajax({
+            url: 'scripts/guest_controller.php?action=check_user',
+            async: false,
+            dataType: 'json',
+            success: function (response) {
+                console.log(response);
+                if (response.is_logged == 0)
+                    window.location.replace('login.html');
+            }
+        });
+        $("#logout_btn").bind('click', function () {
+            $.ajax({
+                url: 'scripts/guest_controller.php?action=log_out',
+                success: function () {
+                    window.location.reload(true);
+                }
+            });
+        });
+        $.ajax({
+            url: '/scripts/get_prices.php?action=get_timestamps',
+            success: function (response) {
+                timestamps = JSON.parse(response).slice();
+
+                $("#header_timestamps").append("" +
+                    "<th scope='col'>" +
+                    "Now" +
+                    "</th>");
+                timestamps.forEach(function (item, i, arr) {
+                    $("#header_timestamps").append("" +
+                        "<th scope='col'>" +
+                        "    " + item.name +
+                        "</th>");
+                });
+
+                $("#price_header_cell").attr('colspan', timestamps.length + 1);
+
+                $.ajax({
+                    url: '/scripts/get_prices.php?action=get_template',
+                    success: function (response) {
+                        let prices = $("#prices");
+                        let arr = JSON.parse(response);
+                        prices.html('');
+                        arr.forEach(function (item, i, arr) {
+                            let html_code = "";
+                            html_code += "" +
+                                "<tr>" +
+                                "   <th>" + (i + 1) + "</th>" +
+                                "   <td>" + item.base_currency + "</td>";
+
+                            html_code += "" +
+                                "   <td id='current_price_to_ticker" + item.base_currency + "'>" +
+                                "       <span id='current_price_number" + item.base_currency + "'>Loading...</span> " +
+                                "   </td>";
+
+                            timestamps.forEach(function (item2, i, arr) {
+                                html_code += "" +
+                                    "   <td id='" + item2.minutes + "_price_to_ticker" + item.base_currency + "'>" +
+                                    "       <span id='" + item2.minutes + "_price_number" + item.base_currency + "'>Loading...</span> " +
+                                    "       <span id='" + item2.minutes + "_price_number_percents" + item.base_currency + "' class='text-small'></span>" +
+                                    "   </td>";
+                            });
+
+                            html_code += "</tr>";
+                            prices.append(html_code);
+                            prices_dct[item.base_currency] = Number(item.price);
+                        });
+                    }
+                })
+                ;
+                get_prices();
+                setInterval(get_prices, 3000);
+            }
+        });
+    }
+
+    function get_prices() {
+        $.ajax({
+            url: '/scripts/get_prices.php?action=get_prices',
+            type: 'POST',
+            dataType: 'json',
+            success: function (response) {
+                let prices = $("#prices");
+                let arr = response;
+                arr.forEach(function (item, i, arr) {
+                    let price = $("#current_price_to_ticker" + item.base_currency);
+                    let price_number = $("#current_price_number" + item.base_currency);
+                    let current_price = Number(Number(item.price).toFixed(money_precision));
+                    prices_dct[item.base_currency] = current_price;
+                    price_number.html("$" + current_price.toFixed(money_precision));
+                    item.timestamps.forEach(function (timestamp, i, timestamps) {
+                        let timestamp_cell = $("#" + timestamp.minutes + "_price_number" + item.base_currency);
+                        let timestamp_percent_cell = $("#" + timestamp.minutes + "_price_number_percents" + item.base_currency);
+                        if (timestamp.price !== '-') {
+                            let timestamp_price = Number(Number(timestamp.price).toFixed(money_precision));
+                            timestamp_cell.html("$" + timestamp_price.toFixed(money_precision));
+                            timestamp_percent_cell.html('');
+                            timestamp_percent_cell.removeClass("text-success text-danger");
+                            if (timestamp_price !== current_price) {
+                                let percentage = Number(Math.abs(timestamp_price / current_price * 100.0 - 100.0).toFixed(percentage_precision));
+                                if (percentage !== 0) {
+                                    timestamp_percent_cell.html((current_price > timestamp_price ? '-' : '+') + percentage.toFixed(percentage_precision) + "%");
+                                    if (current_price > timestamp_price)
+                                        timestamp_percent_cell.addClass("text-danger");
+                                    else
+                                        timestamp_percent_cell.addClass("text-success");
+                                }
+                            }
+                        }
+                        else
+                            timestamp_cell.html("-");
+                    });
+                });
+            }
+        });
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+.idea/
+.idea/dataSources.local.xml
+.idea/dataSources.xml
+.idea/digital_currency_project.iml
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+.idea/workspace.xml
+test.php
+config.php
